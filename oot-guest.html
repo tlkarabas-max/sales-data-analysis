@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OOT Guest Analysis Tool</title>
+    <meta name="description" content="Analyze Out of Town (OOT) vs Local guest data for staff performance metrics">
+    <meta name="author" content="Staff Analytics">
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    
+    <style>
+        /* Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        /* Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.95;
+        }
+        
+        /* Main Content */
+        .content {
+            padding: 40px;
+        }
+        
+        /* Instructions Box */
+        .instructions {
+            background: #e8f4f8;
+            border-left: 4px solid #2196F3;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .instructions h3 {
+            color: #1976D2;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ul {
+            margin-left: 20px;
+            color: #555;
+        }
+        
+        .instructions li {
+            margin: 5px 0;
+        }
+        
+        /* File Upload Area */
+        .file-upload-area {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 30px;
+        }
+        
+        .file-upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .file-upload-area.dragover {
+            border-color: #667eea;
+            background: #e8efff;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            font-size: 1.2em;
+            color: #495057;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+        
+        .upload-hint {
+            color: #6c757d;
+            font-size: 0.95em;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        /* Status Messages */
+        .message {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .loading {
+            background: #e3f2fd;
+            color: #1565c0;
+            border: 1px solid #bbdefb;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #bbdefb;
+            border-top-color: #1565c0;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+        
+        .success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        
+        .debug-info {
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            color: #616161;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        /* Results Section */
+        .results-section {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Summary Statistics */
+        .stats-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin: 30px 0;
+            display: none;
+        }
+        
+        .stats-summary h3 {
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        
+        .stat-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        
+        /* Tables */
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            margin: 30px 0;
+        }
+        
+        .table-header {
+            background: linear-gradient(135deg, #ff9800 0%, #ff6f00 100%);
+            color: white;
+            padding: 20px;
+        }
+        
+        .table-header h3 {
+            margin: 0;
+            font-size: 1.3em;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: #f8f9fa;
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+            position: sticky;
+            top: 0;
+            background: #f8f9fa;
+            z-index: 10;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        tbody tr {
+            transition: background-color 0.2s ease;
+        }
+        
+        tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        /* Highlighted rows for staff with data */
+        .has-data {
+            font-weight: 600;
+        }
+        
+        .no-data {
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        /* Value cells alignment */
+        .text-center {
+            text-align: center;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        /* Percentage indicators */
+        .percentage {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        .percentage-high {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+        
+        .percentage-medium {
+            background: #fff9c4;
+            color: #f57c00;
+        }
+        
+        .percentage-low {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+        
+        /* Footer */
+        .footer {
+            background: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #6c757d;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Export Button */
+        .export-button {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            margin: 20px 0;
+        }
+        
+        .export-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(86, 171, 47, 0.3);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            table {
+                font-size: 0.9em;
+            }
+            
+            th, td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <div class="header">
+            <h1>📊 OOT Guest Analysis Tool</h1>
+            <p>Analyze Out of Town vs Local guest distribution by staff member</p>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="content">
+            <!-- Instructions -->
+            <div class="instructions">
+                <h3>📋 How to Use This Tool</h3>
+                <ul>
+                    <li>Upload your CSV file with guest data (must include "Employee" or "Closed By" and "Type (Local/OOT)" columns)</li>
+                    <li>The tool will automatically detect if guests are "Out of Town" or "Local"</li>
+                    <li>View comprehensive statistics for each staff member</li>
+                    <li>Export results for use in Excel or other applications</li>
+                </ul>
+            </div>
+            
+            <!-- File Upload Area -->
+            <div class="file-upload-area" id="dropZone">
+                <label for="csvFile">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">Choose CSV File or Drag & Drop</div>
+                    <div class="upload-hint">Accepts .csv files with guest data</div>
+                    <input type="file" id="csvFile" accept=".csv">
+                </label>
+            </div>
+            
+            <!-- Status Messages -->
+            <div class="message loading" id="loading">
+                <span class="loading-spinner"></span>
+                Processing your data...
+            </div>
+            
+            <div class="message error" id="error"></div>
+            <div class="message success" id="success"></div>
+            <div class="debug-info" id="debug"></div>
+            
+            <!-- Results Section -->
+            <div class="results-section" id="resultsSection">
+                <!-- Summary Statistics -->
+                <div class="stats-summary" id="summary">
+                    <h3>📈 Summary Statistics</h3>
+                    <div class="stats-grid" id="summaryContent"></div>
+                </div>
+                
+                <!-- Main Results Table -->
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>📊 Staff Performance Metrics</h3>
+                    </div>
+                    <table id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>Staff Name</th>
+                                <th class="text-center">Total OOT</th>
+                                <th class="text-center">Total Local</th>
+                                <th class="text-center">Total Guests</th>
+                                <th class="text-center">OOT %</th>
+                                <th class="text-center">Local %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableBody"></tbody>
+                    </table>
+                </div>
+                
+                <!-- Export Button -->
+                <button class="export-button" onclick="exportResults()">
+                    📥 Export Results to CSV
+                </button>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>OOT Guest Analysis Tool v1.0 | Built with HTML5, JavaScript & Papa Parse</p>
+            <p><a href="https://github.com">View on GitHub</a></p>
+        </div>
+    </div>
+    
+    <script>
+        // Global variables
+        let processedData = null;
+        
+        // Target staff members
+        const targetStaff = [
+            'Madison Jeske',
+            'Di Fisher',
+            'Nicole Ortiz',
+            'Angela McNally',
+            'Edward Franklin',
+            'Mariaelena Parra',
+            'Cheyenne Bringham'
+        ];
+        
+        // Initialize drag and drop
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('csvFile');
+        
+        // Drag and drop event listeners
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        // File input change event
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        // Handle file processing
+        function handleFile(file) {
+            // Reset UI
+            hideAllMessages();
+            showMessage('loading', true);
+            document.getElementById('resultsSection').style.display = 'none';
+            
+            // Validate file type
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                showMessage('error', true, 'Please upload a CSV file');
+                showMessage('loading', false);
+                return;
+            }
+            
+            // Read file
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    processCSV(e.target.result);
+                } catch (error) {
+                    showMessage('error', true, `Error processing file: ${error.message}`);
+                    showMessage('loading', false);
+                }
+            };
+            
+            reader.onerror = function() {
+                showMessage('error', true, 'Error reading file');
+                showMessage('loading', false);
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        // Process CSV data
+        function processCSV(csvContent) {
+            // Parse CSV
+            const parsed = Papa.parse(csvContent, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: false,
+                delimitersToGuess: [',', '\t', '|', ';']
+            });
+            
+            if (parsed.errors.length > 0) {
+                console.warn('CSV parsing warnings:', parsed.errors);
+            }
+            
+            // Clean and process data
+            const cleanedData = parsed.data.map(row => {
+                const cleanRow = {};
+                Object.keys(row).forEach(key => {
+                    cleanRow[key.trim()] = row[key] ? row[key].trim() : row[key];
+                });
+                return cleanRow;
+            });
+            
+            // Validate required columns
+            if (cleanedData.length === 0) {
+                throw new Error('No data found in CSV file');
+            }
+            
+            const firstRow = cleanedData[0];
+            const hasEmployee = 'Employee' in firstRow;
+            const hasClosedBy = 'Closed By' in firstRow;
+            const hasType = 'Type (Local/OOT)' in firstRow;
+            
+            if (!hasType) {
+                throw new Error('Missing required column: "Type (Local/OOT)"');
+            }
+            
+            if (!hasEmployee && !hasClosedBy) {
+                throw new Error('Missing required column: "Employee" or "Closed By"');
+            }
+            
+            // Determine which column to use for staff names
+            const staffColumn = hasClosedBy ? 'Closed By' : 'Employee';
+            
+            // Get unique type values for debugging
+            const typeValues = new Set();
+            cleanedData.forEach(row => {
+                if (row['Type (Local/OOT)']) {
+                    typeValues.add(row['Type (Local/OOT)']);
+                }
+            });
+            
+            // Show debug info
+            const debugInfo = `
+                <strong>Debug Information:</strong><br>
+                Total rows: ${cleanedData.length}<br>
+                Staff column used: "${staffColumn}"<br>
+                Type values found: ${Array.from(typeValues).map(v => `"${v}"`).join(', ')}<br>
+                Columns: ${Object.keys(firstRow).join(', ')}
+            `;
+            showMessage('debug', true, debugInfo);
+            
+            // Initialize statistics
+            const staffStats = {};
+            targetStaff.forEach(name => {
+                staffStats[name] = {
+                    totalOOT: 0,
+                    totalLocal: 0,
+                    totalGuests: 0
+                };
+            });
+            
+            // Also track any other staff found in the data
+            const otherStaff = new Set();
+            
+            // Process each record
+            let processedCount = 0;
+            cleanedData.forEach(row => {
+                const employee = row[staffColumn];
+                const type = row['Type (Local/OOT)'];
+                
+                if (employee) {
+                    if (staffStats[employee]) {
+                        processedCount++;
+                        staffStats[employee].totalGuests++;
+                        
+                        // Check for "Out of Town" (not "OOT")
+                        if (type === 'Out of Town') {
+                            staffStats[employee].totalOOT++;
+                        } else if (type === 'Local') {
+                            staffStats[employee].totalLocal++;
+                        }
+                    } else {
+                        otherStaff.add(employee);
+                    }
+                }
+            });
+            
+            // Store processed data globally
+            processedData = staffStats;
+            
+            // Calculate totals
+            let grandTotalOOT = 0;
+            let grandTotalLocal = 0;
+            let grandTotalGuests = 0;
+            
+            targetStaff.forEach(name => {
+                const stats = staffStats[name];
+                grandTotalOOT += stats.totalOOT;
+                grandTotalLocal += stats.totalLocal;
+                grandTotalGuests += stats.totalGuests;
+            });
+            
+            // Display results
+            displaySummary(grandTotalOOT, grandTotalLocal, grandTotalGuests, cleanedData.length, processedCount);
+            displayResults(staffStats);
+            
+            // Show success message
+            const successMsg = processedCount > 0 
+                ? `✅ Successfully processed ${processedCount} records for target staff`
+                : '⚠️ No records found for target staff members. Check if staff names match exactly.';
+            showMessage('success', true, successMsg);
+            
+            // Hide loading
+            showMessage('loading', false);
+            
+            // Show results section
+            document.getElementById('resultsSection').style.display = 'block';
+        }
+        
+        // Display summary statistics
+        function displaySummary(totalOOT, totalLocal, totalGuests, totalRecords, processedRecords) {
+            const avgOOTPercent = totalGuests > 0 
+                ? ((totalOOT / totalGuests) * 100).toFixed(1)
+                : '0';
+            
+            const summaryHTML = `
+                <div class="stat-item">
+                    <div class="stat-label">Total Records</div>
+                    <div class="stat-value">${totalRecords.toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Processed Records</div>
+                    <div class="stat-value">${processedRecords.toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total OOT Guests</div>
+                    <div class="stat-value">${totalOOT.toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Local Guests</div>
+                    <div class="stat-value">${totalLocal.toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Overall OOT %</div>
+                    <div class="stat-value">${avgOOTPercent}%</div>
+                </div>
+            `;
+            
+            document.getElementById('summaryContent').innerHTML = summaryHTML;
+            document.getElementById('summary').style.display = 'block';
+        }
+        
+        // Display results table
+        function displayResults(staffStats) {
+            let tableHTML = '';
+            
+            targetStaff.forEach(name => {
+                const stats = staffStats[name];
+                const ootPercent = stats.totalGuests > 0 
+                    ? ((stats.totalOOT / stats.totalGuests) * 100).toFixed(1)
+                    : '0.0';
+                const localPercent = stats.totalGuests > 0 
+                    ? ((stats.totalLocal / stats.totalGuests) * 100).toFixed(1)
+                    : '0.0';
+                
+                const rowClass = stats.totalGuests > 0 ? 'has-data' : 'no-data';
+                
+                // Determine percentage class
+                let ootPercentClass = '';
+                if (stats.totalGuests > 0) {
+                    if (parseFloat(ootPercent) >= 30) {
+                        ootPercentClass = 'percentage-high';
+                    } else if (parseFloat(ootPercent) >= 20) {
+                        ootPercentClass = 'percentage-medium';
+                    } else {
+                        ootPercentClass = 'percentage-low';
+                    }
+                }
+                
+                tableHTML += `
+                    <tr class="${rowClass}">
+                        <td>${name}</td>
+                        <td class="text-center">${stats.totalOOT}</td>
+                        <td class="text-center">${stats.totalLocal}</td>
+                        <td class="text-center">${stats.totalGuests}</td>
+                        <td class="text-center">
+                            ${stats.totalGuests > 0 
+                                ? `<span class="percentage ${ootPercentClass}">${ootPercent}%</span>`
+                                : '-'}
+                        </td>
+                        <td class="text-center">${stats.totalGuests > 0 ? localPercent + '%' : '-'}</td>
+                    </tr>
+                `;
+            });
+            
+            document.getElementById('resultsTableBody').innerHTML = tableHTML;
+        }
+        
+        // Export results to CSV
+        function exportResults() {
+            if (!processedData) {
+                alert('No data to export. Please process a file first.');
+                return;
+            }
+            
+            // Prepare data for export
+            const exportData = targetStaff.map(name => {
+                const stats = processedData[name];
+                const ootPercent = stats.totalGuests > 0 
+                    ? ((stats.totalOOT / stats.totalGuests) * 100).toFixed(1)
+                    : '0';
+                const localPercent = stats.totalGuests > 0 
+                    ? ((stats.totalLocal / stats.totalGuests) * 100).toFixed(1)
+                    : '0';
+                
+                return {
+                    'Staff Name': name,
+                    'Total OOT': stats.totalOOT,
+                    'Total Local': stats.totalLocal,
+                    'Total Guests': stats.totalGuests,
+                    'OOT %': ootPercent,
+                    'Local %': localPercent
+                };
+            });
+            
+            // Convert to CSV
+            const csv = Papa.unparse(exportData);
+            
+            // Download file
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'oot_analysis_results.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // Message handling functions
+        function showMessage(type, show, content = '') {
+            const element = document.getElementById(type);
+            if (element) {
+                element.style.display = show ? 'block' : 'none';
+                if (content) {
+                    element.innerHTML = content;
+                }
+            }
+        }
+        
+        function hideAllMessages() {
+            ['loading', 'error', 'success', 'debug'].forEach(id => {
+                showMessage(id, false);
+            });
+        }
+    </script>
+</body>
+</html>
